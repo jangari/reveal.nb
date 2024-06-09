@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- This file is intended for integration between nb and reveal, using the reveal.nb plugin <https://github.com/jangari/reveal.nb> -->
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <title>reveal.js</title>
+
+        <link rel="stylesheet" href="dist/reset.css">
+        <link rel="stylesheet" href="dist/reveal.css">
+        <link rel="stylesheet" href="dist/theme/black.css" id="theme">
+
+        <!-- Theme used for syntax highlighted code -->
+        <link rel="stylesheet" href="plugin/highlight/monokai.css">
+    </head>
+    <body>
+        <div class="reveal">
+            <div class="slides">
+                <section id="md" data-markdown data-separator-vertical="\+\+\+"></section>
+            </div>
+        </div>
+        <!-- This script parses the query string parameter for a note path, and applies its path to the data-markdown attribute in the section element above. -->
+        <script>
+            const urlParams = new URLSearchParams(window.location.search);
+            const notePath = urlParams.get('note');
+            if (notePath) {
+                const section = document.getElementById('md');
+                section.setAttribute('data-markdown', notePath);
+            }
+        </script>
+        <script src="dist/reveal.js"></script>
+        <script src="plugin/notes/notes.js"></script>
+        <script src="plugin/markdown/markdown.js"></script>
+        <script src="plugin/highlight/highlight.js"></script>
+        <script>
+            // More info about initialization & config:
+            // - https://revealjs.com/initialization/
+            // - https://revealjs.com/config/
+            Reveal.initialize({
+                hash: true,
+
+                // Learn about plugins: https://revealjs.com/plugins/
+                plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+                });
+        </script>
+    </body>
+</html>

@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+###############################################################################
+# reveal.nb-plugin
+#
+# Launches a reveal.js server and presents note
+#
+# Author: Jangari (https://github.com/jangari)
+#
+# A plugin for `nb`.
+#   https://github.com/xwmx/nb
+###############################################################################
+
+# Add the new subcommand names with `_subcommands add <name>`.
+_subcommands add "reveal"
+_subcommands add "rv"
+_subcommands add "slides"
+_subcommands add "present"
+_subcommands add "pres"
+_subcommands alias "reveal" "rv" 
+_subcommands alias "reveal" "slides" 
+_subcommands alias "reveal" "present" 
+_subcommands alias "reveal" "pres" 
+
+# Define help and usage text with `_describe_<subcommand>()` and point aliases at the same.
+_describe_reveal() {
+    cat <<HEREDOC
+$(_color_primary "Usage"):
+  ${_ME} reveal [ --stop | <selector> ]
+
+$(_color_primary "Arguments"):
+  <selector>                  Specifies the note to send to reveal.
+
+$(_color_primary "Options"):
+  -s, --stop                  Stop a running server
+  -k, --kill-after <timeout>  Automatically kill the server after <timeout> in seconds.
+  -n, --no-open               Launch server but do not open. Useful for re-connecting a live
+                              browser session to a server for hot reloading.
+
+$(_color_primary "Description"):
+  Launches a Reveal.js server and sends a note to it, and then opens it as a presentation.
+  While the server is active, it will listen for any changes to the markdown file and hot reload.
+
+$(_color_primary "Environment Variables"):
+  NB_REVEAL_PATH              Path to reveal.js library.
+  NB_REVEAL_NOTE_PATH         Path, relative to \`NB_REVEAL_PATH\`, in which notes are stored.
+  NB_REVEAL_HTML              Path to html file to load. Useful to maintain a specific config
+                              for your nb presentations separate from others. Defaults to null,
+                              thus loading 'index.html'.
+
+$(_color_primary "Examples"):
+  ${_ME} reveal pres.md           Launch revealjs server and presents the pres.md note
+  ${_ME} rv -n example:1          Launch revealjs server and send note 1 in the example
+                              notebook to it, but do not open
+  ${_ME} slides -s                Stop a running revealjs server
+  ${_ME} pres 20 -k 600           Launch revealjs server and presents note 20 from the 
+                              current notebook, and automatically kill the server
+                              after 10 minutes
+
+$(_color_primary "Aliases"):
+  ${_ME} slides
+  ${_ME} present
+  ${_ME} pres
+  ${_ME} rv
+HEREDOC
+}
+
+_describe_slides() (_describe_reveal)
+_describe_present() (_describe_reveal)
+_describe_pres() (_describe_reveal)
+_describe_rv() (_describe_reveal)
+
+# Define the subcommand as a function, named with a leading underscore.
+_reveal() {
+    local _stop=false
+    _pid_file="/tmp/reveal_server_pid"
+    _timeout=""
+    _open=true
+
+    # Parse flags and offset
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-launch|-n)
+                _open=false
+                shift 1
+                ;;
+            --kill-after|-k)
+                if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+                    _timeout=$2
+                    shift 2
+                else
+                    echo "Missing or invalid timeout value. It must be an integer."
+                    exit 1
+            fi
+            ;;
+            --stop|-s)
+                _stop=true
+                shift 1
+                ;;
+            *)
+                _selector="$1"
+                shift 1
+                ;;
+        esac
+    done
+
+    function _start_reveal_server {
+        if [ -f "$_pid_file" ]; then
+            echo "Reveal.js server is already running. Stop it first with 'nb reveal --stop'."
+            exit 1
+        fi
+
+        _note_path=$(nb ${_selector} --no-id --no-indicator --path)
+
+        if [ -z "$_note_path" ]; then
+            echo "Note not found."
+            exit 1
+        fi
+
+        if [ -z "${NB_REVEAL_PATH:-}" ]; then
+            echo "NB_REVEAL_PATH not set in .nbrc."
+            exit 1
+        fi
+
+    # Change to reveal.js directory and start the server
+    cd "$NB_REVEAL_PATH" || exit 1
+    npm start > server_output.log 2>&1 &
+
+    _pid=$!
+
+    # Wait for the server to start and capture the URL
+    sleep 3  # Adjust this if needed
+    _reveal_url=$(grep -Eo 'http://localhost:[0-9]+' server_output.log)
+
+    if [ -z "$_reveal_url" ]; then
+        echo "Failed to start the server."
+        _stop_reveal_server
+        exit 1
+    fi
+
+    # Write the PID to the PID file
+    echo $_pid > $_pid_file
+
+    # Calculate the relative path to the note within the reveal.js directory
+    _rel_note_path="${_note_path#$NB_DIR/}"
+
+    # Construct the full path within the reveal.js directory
+    _full_note_path="${NB_REVEAL_REL_NOTE_PATH}/${_rel_note_path}"
+
+    # Error out if note isn't found in the right place
+    if [ ! -f "$_full_note_path" ]; then
+        echo "Note does not exist in the reveal.js directory."
+        _stop_reveal_server
+        exit 1
+    fi
+
+    # Construct the URL with nb.html and the markdown parameter
+    _full_url="${_reveal_url}/${NB_REVEAL_HTML:-}?note=${_full_note_path}"
+
+    if $_open; then
+        echo "Opening $_full_url"
+
+        # Open the generated HTML in the default browser
+        if [ -n "${NB_REVEAL_BROWSER_CMD:-}" ]; then
+            "$NB_REVEAL_BROWSER_CMD" "$_full_url"
+        elif which xdg-open > /dev/null; then
+            xdg-open "$_full_url"
+        elif which gnome-open > /dev/null; then
+            gnome-open "$_full_url"
+        elif which open > /dev/null; then
+            open "$_full_url"
+        else
+            echo "Could not detect the web browser to use. Try navigating directly:"
+            echo "$_full_url"
+            exit 1
+        fi
+    else
+        echo "Reveal.js server running at $_full_url"
+    fi
+
+    # Schedule server stop after timeout if specified
+    if [ -n "$_timeout" ]; then
+        (sleep "$_timeout"; kill "$_pid"; rm "$_pid_file"; echo "Reveal.js server stopped after timeout.") &
+    fi
+}
+
+function _stop_reveal_server {
+    if [ -f "$_pid_file" ]; then
+        _pid=$(cat "$_pid_file")
+        if [ -n "$_pid" ]; then
+            kill $_pid
+            rm "$_pid_file"
+            echo "Reveal.js server stopped."
+        else
+            echo "No server PID found."
+        fi
+    else
+        echo "No server running."
+    fi
+}
+
+if  ${_stop}; then
+    _stop_reveal_server
+else
+    _start_reveal_server
+fi
+}
