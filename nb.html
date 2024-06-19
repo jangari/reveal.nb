@@ -34,6 +34,30 @@
         <script src="plugin/markdown/markdown.js"></script>
         <script src="plugin/highlight/highlight.js"></script>
         <script>
+            // Correct image paths
+            function updateImagePaths() {
+
+                const noteParam = new URLSearchParams(window.location.search).get('note');
+                if (!noteParam) {
+                    return;
+                }
+                const sep = '/';
+                const pathParts = noteParam.split('/');
+                pathParts.pop();
+                const basePath = pathParts.join('/');
+
+                const images = document.querySelectorAll('img');
+                images.forEach(img => {
+                    if (img.src.startsWith(window.location.origin) && !img.src.includes(basePath)) {
+                        const url = new URL(img.src);
+                        img.src = `${url.origin}${sep}${basePath}${url.pathname}`;
+                    }
+                });
+            }
+            // Attach the above function to the ready event
+            Reveal.addEventListener('ready', function(event) {
+                updateImagePaths();
+            });
             // More info about initialization & config:
             // - https://revealjs.com/initialization/
             // - https://revealjs.com/config/
