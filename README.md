@@ -34,7 +34,7 @@ nb reveal [ --stop | <selector>  [ --kill-after <timeout> ] [ --no-open ] ]
 | Option | Description |
 | --- | --- |
 | -s, --stop                 | Stop a running server |
-| -k, --kill-after <timeout> | Automatically kill the server after <timeout> seconds. |
+| -k, --kill-after \<timeout\> | Automatically kill the server after \<timeout\> seconds. |
 | -n, --no-open              | Launch server but do not open. Useful for re-connecting a live browser session to a server for hot reloading. |
 
 ## Environment Variables
